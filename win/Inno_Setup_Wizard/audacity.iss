@@ -7,7 +7,8 @@
 ;
 
 ; This requires that the ISS Preprocessor be installed
-#define AppExe "..\release\audacity.exe" 
+; C:\Users\csevast\projects\audacity-build\audacity\out\build\x86-Release\bin\Release
+#define AppExe "..\..\out\build\x86-Release\bin\release\audacity.exe" 
 #define AppMajor ""
 #define AppMinor ""
 #define AppRev ""
@@ -103,11 +104,11 @@ Source: "..\..\presets\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 ; Don't use the WXWIN environment variable, because...
 ; 1) Can't get the documented {%WXWIN|default dir} parsing to work.
 ; 2) Need the DLL's in the release dir for testing, anyway.
-Source: "..\release\wxbase313u_xml_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\wxbase313u_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\wxmsw313u_core_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\wxmsw313u_html_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\wxmsw313u_qa_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\wxbase313u_xml_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\wxbase313u_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\wxmsw313u_core_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\wxmsw313u_html_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\wxmsw313u_qa_vc_custom.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 ; MSVC runtime DLLs. Some users can't put these in the system dir, so just put them in the EXE dir.
 ; It's legal, per http://www.fsf.org/licensing/licenses/gpl-faq.html#WindowsRuntimeAndGPL .
@@ -118,18 +119,18 @@ Source: "..\release\wxmsw313u_qa_vc_custom.dll"; DestDir: "{app}"; Flags: ignore
 ; "C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\redist\x86\Microsoft.VC120.CRT\"
 ; or "C:\Program Files\Microsoft Visual Studio 12.0\VC\redist\x86\Microsoft.VC120.CRT\"
 ; according to your system 
-Source: "..\release\concrt140.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\msvcp140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\msvcp140_2.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\release\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\concrt140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\msvcp140.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\msvcp140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\msvcp140_2.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\vcruntime140.dll"; DestDir: "{app}"; Flags: ignoreversion
 
-Source: "..\release\languages\*"; DestDir: "{app}\Languages\"; Flags: ignoreversion recursesubdirs
+Source: "..\..\out\build\x86-Release\bin\release\languages\*"; DestDir: "{app}\Languages\"; Flags: ignoreversion recursesubdirs
 ; We don't ship all modules, so the next line is commented out
 ; Source: "..\release\modules\*"; DestDir: "{app}\Modules\"; Flags: ignoreversion recursesubdirs skipifsourcedoesntexist
-Source: "..\release\nyquist\*"; DestDir: "{app}\Nyquist\"; Flags: ignoreversion recursesubdirs
-Source: "..\release\plug-ins\*"; DestDir: "{app}\Plug-Ins\"; Flags: ignoreversion
-Source: "..\release\modules\mod-script-pipe.dll"; DestDir: "{app}\modules\"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\nyquist\*"; DestDir: "{app}\Nyquist\"; Flags: ignoreversion recursesubdirs
+Source: "..\..\out\build\x86-Release\bin\release\plug-ins\*"; DestDir: "{app}\Plug-Ins\"; Flags: ignoreversion
+Source: "..\..\out\build\x86-Release\bin\release\modules\mod-script-pipe.dll"; DestDir: "{app}\modules\"; Flags: ignoreversion
 
 [Icons]
 Name: "{commonprograms}\Audacity"; Filename: "{app}\audacity.exe"
@@ -271,11 +272,11 @@ Name: "he"; MessagesFile: "compiler:Languages\Hebrew.isl"
 Name: "hi"; MessagesFile: "{#Get('Hindi.islu')}"
 Name: "hr"; MessagesFile: "{#Get('Croatian.isl')}"
 Name: "hu"; MessagesFile: "compiler:Languages\Hungarian.isl"
-Name: "hy"; MessagesFile: "compiler:Languages\Armenian.islu"
+Name: "hy"; MessagesFile: "compiler:Languages\Armenian.isl"
 Name: "id"; MessagesFile: "{#Get('Indonesian.isl')}"
 Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "ja"; MessagesFile: "compiler:Languages\Japanese.isl"
-Name: "ka"; MessagesFile: "{#Get('Georgian.islu')}"
+Name: "ka"; MessagesFile: "{#Get('Georgian.isl')}"
 Name: "km"; MessagesFile: "{#Dummy('Khmer', '0409')}"
 Name: "ko"; MessagesFile: "{#Dummy('Korean', '0412')}"
 Name: "lt"; MessagesFile: "{#Get('Lithuanian.isl')}"
