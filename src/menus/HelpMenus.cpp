@@ -1,5 +1,4 @@
-#include "../Audacity.h"
-#include "../Experimental.h"
+
 
 #include <wx/bmpbuttn.h>
 #include <wx/textctrl.h>
@@ -10,7 +9,7 @@
 #include "../AudacityLogger.h"
 #include "../AudioIOBase.h"
 #include "../CommonCommandFlags.h"
-#include "../CrashReport.h"
+#include "../CrashReport.h" // for HAS_CRASH_REPORT
 #include "../FileNames.h"
 #include "../HelpText.h"
 #include "../Menus.h"
@@ -25,10 +24,6 @@
 #include "../prefs/PrefsDialog.h"
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/HelpSystem.h"
-
-#if defined(EXPERIMENTAL_CRASH_REPORT)
-#include <wx/debugrpt.h>
-#endif
 
 // private helper classes and functions
 namespace {
@@ -353,7 +348,7 @@ void OnShowLog( const CommandContext &context )
    }
 }
 
-#if defined(EXPERIMENTAL_CRASH_REPORT)
+#if defined(HAS_CRASH_REPORT)
 void OnCrashReport(const CommandContext &WXUNUSED(context) )
 {
 // Change to "1" to test a real crash
@@ -362,6 +357,31 @@ void OnCrashReport(const CommandContext &WXUNUSED(context) )
    *p = 1234;
 #endif
    CrashReport::Generate(wxDebugReport::Context_Current);
+}
+#endif
+
+#ifdef IS_ALPHA
+void OnSegfault(const CommandContext &)
+{
+   unsigned *p = nullptr;
+   *p = 0xDEADBEEF;
+}
+   
+void OnException(const CommandContext &)
+{
+   // Throw an exception that can be caught only as (...)
+   // The intent is to exercise detection of unhandled exceptions by the
+   // crash reporter
+   struct Unique{};
+   throw Unique{};
+}
+   
+void OnAssertion(const CommandContext &)
+{
+   // We don't use assert() much directly, but Breakpad does detect it
+   // This may crash the program only in debug builds
+   // See also wxSetAssertHandler, and wxApp::OnAssertFailure()
+   assert(false);
 }
 #endif
 
@@ -419,7 +439,7 @@ void OnMenuTree(const CommandContext &context)
    MenuManager::Visit( visitor );
 
    ShowDiagnostics( project, visitor.info,
-      XO("Menu Tree"), wxT("menutree.txt"), true );
+      Verbatim("Menu Tree"), wxT("menutree.txt"), true );
 }
 
 void OnCheckForUpdates(const CommandContext &WXUNUSED(context))
@@ -523,18 +543,30 @@ BaseItemSharedPtr HelpMenu()
       #endif
             Command( wxT("Log"), XXO("Show &Log..."), FN(OnShowLog),
                AlwaysEnabledFlag ),
-      #if defined(EXPERIMENTAL_CRASH_REPORT)
+      #if defined(HAS_CRASH_REPORT)
             Command( wxT("CrashReport"), XXO("&Generate Support Data..."),
                FN(OnCrashReport), AlwaysEnabledFlag )
       #endif
 
-   #ifdef IS_ALPHA
+      #ifdef IS_ALPHA
             ,
+            // alpha-only items don't need to internationalize, so use
+            // Verbatim for labels
+
+            Command( wxT("RaiseSegfault"), Verbatim("Test segfault report"),
+               FN(OnSegfault), AlwaysEnabledFlag ),
+
+            Command( wxT("ThrowException"), Verbatim("Test exception report"),
+               FN(OnException), AlwaysEnabledFlag ),
+
+            Command( wxT("ViolateAssertion"), Verbatim("Test assertion report"),
+               FN(OnAssertion), AlwaysEnabledFlag ),
+
             // Menu explorer.  Perhaps this should become a macro command
-            Command( wxT("MenuTree"), XXO("Menu Tree..."),
+            Command( wxT("MenuTree"), Verbatim("Menu Tree..."),
                FN(OnMenuTree),
                AlwaysEnabledFlag )
-   #endif
+      #endif
          )
    #ifndef __WXMAC__
       ),

@@ -22,6 +22,7 @@ Paul Licameli -- split from ProjectFileIO.cpp
 #include "Project.h"
 #include "FileException.h"
 #include "wxFileNameWrapper.h"
+#include "SentryHelper.h"
 
 // Configuration to provide "safe" connections
 static const char *SafeConfig =
@@ -138,60 +139,8 @@ int DBConnection::Open(const FilePath fileName)
    mCheckpointStop = false;
    mCheckpointPending = false;
    mCheckpointActive = false;
-
-   const char *name = fileName.ToUTF8();
-
-   bool success = false;
-   rc = sqlite3_open(name, &mDB);
-   if (rc == SQLITE_OK)
-   {
-      // Set default mode
-      // (See comments in ProjectFileIO::SaveProject() about threading
-      if (SafeMode())
-      {
-         rc = sqlite3_open(name, &mCheckpointDB);
-         if (rc == SQLITE_OK)
-         {
-            // Set default mode
-            // (See comments in ProjectFileIO::SaveProject() about threading
-            if (ModeConfig(mCheckpointDB, "main", SafeConfig))
-            {
-               auto db = mCheckpointDB;
-               mCheckpointThread = std::thread(
-                  [this, db, fileName]{ CheckpointThread(db, fileName); });
-
-               // Install our checkpoint hook
-               sqlite3_wal_hook(mDB, CheckpointHook, this);
-
-               success = true;
-            }
-            else
-            {
-               SetDBError(XO("Failed to set safe mode on checkpoint connection to %s").Format(fileName));
-            }
-         }
-         else
-         {
-            wxLogMessage("Failed to open checkpoint connection to %s: %d, %s\n",
-               fileName,
-               rc,
-               sqlite3_errstr(rc));
-         }
-      }
-      else
-      {
-         SetDBError(XO("Failed to set safe mode on primary connection to %s").Format(fileName));
-      }
-   }
-   else
-   {
-      wxLogMessage("Failed to open primary connection to %s: %d, %s\n",
-         fileName,
-         rc,
-         sqlite3_errstr(rc));
-   }
-
-   if (!success)
+   rc = OpenStepByStep( fileName );
+   if ( rc != SQLITE_OK)
    {
       if (mCheckpointDB)
       {
@@ -205,7 +154,61 @@ int DBConnection::Open(const FilePath fileName)
          mDB = nullptr;
       }
    }
+   return rc;
+}
 
+int DBConnection::OpenStepByStep(const FilePath fileName)
+{
+   const char *name = fileName.ToUTF8();
+
+   bool success = false;
+   int rc = sqlite3_open(name, &mDB);
+   if (rc != SQLITE_OK) 
+   {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "DBConnection::OpenStepByStep::open");
+
+      wxLogMessage("Failed to open primary connection to %s: %d, %s\n",
+         fileName,
+         rc,
+         sqlite3_errstr(rc));
+      return rc;
+   }
+
+   // Set default mode
+   // (See comments in ProjectFileIO::SaveProject() about threading
+   rc = SafeMode();
+   if (rc != SQLITE_OK)
+   {
+      SetDBError(XO("Failed to set safe mode on primary connection to %s").Format(fileName));
+      return rc;
+   }
+
+   rc = sqlite3_open(name, &mCheckpointDB);
+   if (rc != SQLITE_OK)
+   {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "DBConnection::OpenStepByStep::open_checkpoint");
+
+      wxLogMessage("Failed to open checkpoint connection to %s: %d, %s\n",
+         fileName,
+         rc,
+         sqlite3_errstr(rc));
+      return rc;
+   }
+
+   rc = ModeConfig(mCheckpointDB, "main", SafeConfig);
+   if (rc != SQLITE_OK) {
+      SetDBError(XO("Failed to set safe mode on checkpoint connection to %s").Format(fileName));
+      return rc;
+   }
+
+   auto db = mCheckpointDB;
+   mCheckpointThread = std::thread(
+      [this, db, fileName]{ CheckpointThread(db, fileName); });
+
+   // Install our checkpoint hook
+   sqlite3_wal_hook(mDB, CheckpointHook, this);
    return rc;
 }
 
@@ -290,6 +293,9 @@ bool DBConnection::Close()
    rc = sqlite3_close(mCheckpointDB);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "DBConnection::Close::close_checkpoint");
+
       wxLogMessage("Failed to close checkpoint connection for %s\n"
                    "\tError: %s\n",
                    sqlite3_db_filename(mCheckpointDB, nullptr),
@@ -301,6 +307,9 @@ bool DBConnection::Close()
    rc = sqlite3_close(mDB);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "DBConnection::OpenStepByStep::close");
+
       wxLogMessage("Failed to close %s\n"
                    "\tError: %s\n",
                    sqlite3_db_filename(mDB, nullptr),
@@ -325,17 +334,17 @@ bool DBConnection::Close()
    };
 }
 
-bool DBConnection::SafeMode(const char *schema /* = "main" */)
+int DBConnection::SafeMode(const char *schema /* = "main" */)
 {
    return ModeConfig(mDB, schema, SafeConfig);
 }
 
-bool DBConnection::FastMode(const char *schema /* = "main" */)
+int DBConnection::FastMode(const char *schema /* = "main" */)
 {
    return ModeConfig(mDB, schema, FastConfig);
 }
 
-bool DBConnection::ModeConfig(sqlite3 *db, const char *schema, const char *config)
+int DBConnection::ModeConfig(sqlite3 *db, const char *schema, const char *config)
 {
    // Ensure attached DB connection gets configured
    int rc;
@@ -348,6 +357,10 @@ bool DBConnection::ModeConfig(sqlite3 *db, const char *schema, const char *confi
    rc = sqlite3_exec(db, sql, nullptr, nullptr, nullptr);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "DBConnection::ModeConfig");
+      ADD_EXCEPTION_CONTEXT("sqlite3.mode", config);
+
       // Don't store in connection, just report it
       wxLogMessage("Failed to set mode on %s\n"
                    "\tError: %s\n"
@@ -357,7 +370,7 @@ bool DBConnection::ModeConfig(sqlite3 *db, const char *schema, const char *confi
                    sql);
    }
 
-   return rc == SQLITE_OK;
+   return rc;
 }
 
 sqlite3 *DBConnection::DB()
@@ -399,6 +412,10 @@ sqlite3_stmt *DBConnection::Prepare(enum StatementID id, const char *sql)
    rc = sqlite3_prepare_v3(mDB, sql, -1, SQLITE_PREPARE_PERSISTENT, &stmt, 0);
    if (rc != SQLITE_OK)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.query", sql);
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "DBConnection::Prepare");
+
       wxLogMessage("Failed to prepare statement for %s\n"
                    "\tError: %s\n"
                    "\tSQL: %s",
@@ -472,6 +489,9 @@ void DBConnection::CheckpointThread(sqlite3 *db, const FilePath &fileName)
 
       if (rc != SQLITE_OK)
       {
+         ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+         ADD_EXCEPTION_CONTEXT("sqlite3.context", "DBConnection::CheckpointThread");
+
          wxLogMessage("Failed to perform checkpoint on %s\n"
                       "\tErrCode: %d\n"
                       "\tErrMsg: %s",
@@ -501,8 +521,8 @@ void DBConnection::CheckpointThread(sqlite3 *db, const FilePath &fileName)
 
          // Stop the audio.
          GuardedCall(
-            [&message] {
-            throw SimpleMessageBoxException{
+            [&message, rc] {
+            throw SimpleMessageBoxException{ rc != SQLITE_FULL ? ExceptionType::Internal : ExceptionType::BadEnvironment,
                message, XO("Warning"), "Error:_Disk_full_or_not_writable" }; },
             SimpleGuard<void>{},
             [this](AudacityException * e) {
@@ -544,6 +564,9 @@ bool TransactionScope::TransactionStart(const wxString &name)
 
    if (errmsg)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "TransactionScope::TransactionStart");
+
       mConnection.SetDBError(
          XO("Failed to create savepoint:\n\n%s").Format(name)
       );
@@ -565,6 +588,9 @@ bool TransactionScope::TransactionCommit(const wxString &name)
 
    if (errmsg)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "TransactionScope::TransactionCommit");
+
       mConnection.SetDBError(
          XO("Failed to release savepoint:\n\n%s").Format(name)
       );
@@ -586,6 +612,9 @@ bool TransactionScope::TransactionRollback(const wxString &name)
 
    if (errmsg)
    {
+      ADD_EXCEPTION_CONTEXT("sqlite3.rc", std::to_string(rc));
+      ADD_EXCEPTION_CONTEXT("sqlite3.context", "TransactionScope::TransactionRollback");
+
       mConnection.SetDBError(
          XO("Failed to release savepoint:\n\n%s").Format(name)
       );
@@ -603,7 +632,7 @@ TransactionScope::TransactionScope(
    mInTrans = TransactionStart(mName);
    if ( !mInTrans )
       // To do, improve the message
-      throw SimpleMessageBoxException( 
+      throw SimpleMessageBoxException( ExceptionType::Internal,
          XO("Database error.  Sorry, but we don't have more details."), 
          XO("Warning"), 
          "Error:_Disk_full_or_not_writable"

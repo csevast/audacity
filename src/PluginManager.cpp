@@ -18,10 +18,10 @@ effects, generators, analysis-effects, commands.  It also has functions
 for shared and private configs - which need to move out.
 *****************************************************************************/
 
-#include "Audacity.h"
+
 #include "PluginManager.h"
 
-#include "Experimental.h"
+
 
 #include <algorithm>
 
@@ -1435,12 +1435,17 @@ RegistryPath PluginManager::GetPluginEnabledSetting(
    }
 }
 
-bool PluginManager::IsPluginRegistered(const PluginPath &path)
+bool PluginManager::IsPluginRegistered(
+   const PluginPath &path, const TranslatableString *pName)
 {
    for (PluginMap::iterator iter = mPlugins.begin(); iter != mPlugins.end(); ++iter)
    {
-      if (iter->second.GetPath() == path)
+      auto &descriptor = iter->second;
+      if (descriptor.GetPath() == path)
       {
+         if (pName)
+            descriptor.SetSymbol(
+               { descriptor.GetSymbol().Internal(), *pName });
          return true;
       }
    }
@@ -1939,6 +1944,7 @@ void PluginManager::Load()
    {
       // Must start over
       registry.DeleteAll();
+      registry.Flush();
       return;
    }
 
@@ -1973,7 +1979,7 @@ void PluginManager::Load()
          // These particular config edits were originally written to fix Bug 1914.
          if (regver <= "1.0") {
             // Nyquist prompt is a built-in that has moved to the tools menu.
-            if (effectSymbol == "Nyquist Prompt") {
+            if (effectSymbol == NYQUIST_PROMPT_ID) {
                registry.Write(KEY_EFFECTTYPE, "Tool");
             // Old version of SDE was in Analyze menu.  Now it is in Tools.
             // We don't want both the old and the new.
@@ -2116,6 +2122,10 @@ void PluginManager::LoadGroup(FileConfig *pRegistry, PluginType type)
       // effects.
       if (!pRegistry->Read(KEY_SYMBOL, &strVal))
          continue;
+
+      // Related to Bug2778: config file only remembered an internal name,
+      // so this symbol may not contain the correct TranslatableString.
+      // See calls to IsPluginRegistered which can correct that.
       plug.SetSymbol(strVal);
 
       // Get the version and bypass group if not found
@@ -2315,6 +2325,8 @@ void PluginManager::SaveGroup(FileConfig *pRegistry, PluginType type)
       pRegistry->SetPath(REGROOT + group + wxCONFIG_PATH_SEPARATOR + ConvertID(plug.GetID()));
 
       pRegistry->Write(KEY_PATH, plug.GetPath());
+
+      // See comments with the corresponding load-time call to SetSymbol().
       pRegistry->Write(KEY_SYMBOL, plug.GetSymbol().Internal());
 
       // PRL:  Writing KEY_NAME which is no longer read, but older Audacity
@@ -3020,7 +3032,7 @@ RegistryPath PluginManager::SettingsPath(const PluginID & ID, bool shared)
                  wxT("_") +
                  plug.GetVendor() +
                  wxT("_") +
-                 (shared ? wxT("") : plug.GetSymbol().Internal());
+                 (shared ? wxString{} : plug.GetSymbol().Internal());
 
    return SETROOT +
           ConvertID(id) +
